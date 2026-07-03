@@ -1,0 +1,362 @@
+/* 百度网盘文件夹搜索器 - 悬浮面板样式 */
+
+/* ============================================
+   浮动切换按钮
+   ============================================ */
+#folder-search-toggle {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.45);
+  z-index: 2147483647;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#folder-search-toggle:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 28px rgba(102, 126, 234, 0.55);
+}
+
+#folder-search-toggle:active {
+  transform: scale(0.95);
+}
+
+/* 隐藏状态 */
+#folder-search-toggle.hidden {
+  display: none;
+}
+
+/* ============================================
+   悬浮搜索面板
+   ============================================ */
+#folder-search-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  width: 380px;
+  max-height: 520px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 2147483646;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  animation: panelSlideIn 0.25s ease-out;
+}
+
+#folder-search-panel.visible {
+  display: flex;
+}
+
+@keyframes panelSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ============================================
+   搜索头部
+   ============================================ */
+.search-header {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.search-input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 40px 12px 0;
+  border: none;
+  font-size: 16px;
+  color: #333;
+  outline: none;
+  background: transparent;
+}
+
+.search-input::placeholder {
+  color: #bbb;
+}
+
+/* 清除按钮 */
+.search-clear {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #f0f0f0;
+  border-radius: 50%;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #999;
+  transition: all 0.2s;
+}
+
+.search-clear:hover {
+  background: #e0e0e0;
+  color: #666;
+}
+
+.search-clear.visible {
+  display: flex;
+}
+
+/* ============================================
+   搜索结果列表
+   ============================================ */
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+/* 空状态 */
+.search-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+}
+
+.search-empty .empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.search-empty p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.search-empty .hint {
+  font-size: 12px;
+  color: #ccc;
+  margin-top: 8px;
+}
+
+/* 加载状态 */
+.search-loading {
+  padding: 30px 20px;
+  text-align: center;
+}
+
+.search-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f0f0f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 单个结果项 */
+.result-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  transition: background 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.result-item:hover {
+  background: #f8f9ff;
+}
+
+.result-item.active {
+  background: #f0f5ff;
+  border-left-color: #667eea;
+}
+
+.result-item:active {
+  background: #e8eeff;
+}
+
+.result-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.result-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-name mark {
+  background: #fff3b0;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.result-path {
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-path .separator {
+  color: #ddd;
+  margin: 0 4px;
+}
+
+/* 键盘提示 */
+.result-hint {
+  font-size: 11px;
+  color: #bbb;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ============================================
+   面板底部
+   ============================================ */
+.search-footer {
+  padding: 10px 16px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.search-footer .shortcut {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-footer .key {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #999;
+}
+
+/* ============================================
+   提示消息
+   ============================================ */
+.search-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 90px;
+  padding: 12px 20px;
+  background: rgba(51, 51, 51, 0.9);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 2147483647;
+  animation: toastIn 0.3s ease-out;
+}
+
+.search-toast.error {
+  background: rgba(220, 53, 69, 0.95);
+}
+
+.search-toast.success {
+  background: rgba(40, 167, 69, 0.95);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   滚动条样式
+   ============================================ */
+.search-results::-webkit-scrollbar {
+  width: 6px;
+}
+
+.search-results::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.search-results::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 3px;
+}
+
+.search-results::-webkit-scrollbar-thumb:hover {
+  background: #ccc;
+}
+
+/* ============================================
+   响应式适配
+   ============================================ */
+@media (max-width: 480px) {
+  #folder-search-panel {
+    width: calc(100vw - 32px);
+    right: 16px;
+    bottom: 80px;
+  }
+
+  #folder-search-toggle {
+    right: 16px;
+    bottom: 16px;
+  }
+}

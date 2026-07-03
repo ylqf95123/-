@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "百度网盘文件夹搜索器",
+  "version": "1.0.0",
+  "description": "快速搜索并定位百度网盘中的文件夹，支持 Ctrl+K 快捷键",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["*://pan.baidu.com/*"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [{
+    "matches": ["*://pan.baidu.com/*"],
+    "js": ["content/content.js"],
+    "css": ["content/content.css"],
+    "run_at": "document_idle"
+  }],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
