@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>百度网盘文件夹搜索器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 320px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: rgba(255,255,255,0.8);
+      font-size: 12px;
+    }
+
+    .feature-list {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .feature-item:last-child {
+      border-bottom: none;
+    }
+
+    .feature-icon {
+      font-size: 20px;
+    }
+
+    .feature-text {
+      flex: 1;
+    }
+
+    .feature-text strong {
+      display: block;
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 2px;
+    }
+
+    .feature-text span {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .shortcut-box {
+      background: rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .shortcut-box .key {
+      display: inline-block;
+      background: white;
+      color: #667eea;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .shortcut-box p {
+      color: rgba(255,255,255,0.9);
+      font-size: 12px;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 16px;
+    }
+
+    .footer a {
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      font-size: 11px;
+    }
+
+    .footer a:hover {
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔍 文件夹搜索器</h1>
+    <p>快速定位百度网盘中的文件夹</p>
+  </div>
+
+  <div class="feature-list">
+    <div class="feature-item">
+      <span class="feature-icon">🚀</span>
+      <div class="feature-text">
+        <strong>一键搜索</strong>
+        <span>快速找到目标文件夹</span>
+      </div>
+    </div>
+    <div class="feature-item">
+      <span class="feature-icon">⌨️</span>
+      <div class="feature-text">
+        <strong>键盘导航</strong>
+        <span>支持上下键选择</span>
+      </div>
+    </div>
+    <div class="feature-item">
+      <span class="feature-icon">📁</span>
+      <div class="feature-text">
+        <strong>自动展开</strong>
+        <span>点击结果自动导航</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="shortcut-box">
+    <div class="key">Ctrl + K</div>
+    <p>在百度网盘页面按此快捷键<br>快速打开搜索面板</p>
+  </div>
+
+  <div class="footer">
+    <a href="#">使用前请先登录百度网盘</a>
+  </div>
+</body>
+</html>
