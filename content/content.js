@@ -1,6 +1,6 @@
 /**
  * 百度网盘文件夹搜索器 - content.js
- * 版本: v1.0.1 - 修复搜索问题
+ * 版本: v1.0.2 - 适配新版百度网盘
  */
 
 (function() {
@@ -10,11 +10,11 @@
   // 配置
   // ============================================
   const CONFIG = {
-    debounceDelay: 400,
-    searchWaitTime: 1200,
+    debounceDelay: 300,
+    searchWaitTime: 1000,
     navigateDelay: 500,
     maxResults: 30,
-    debug: false,  // 调试模式
+    debug: false,
   };
 
   // ============================================
@@ -30,7 +30,7 @@
   // ============================================
   function log(...args) {
     if (CONFIG.debug) {
-      console.log('[文件夹搜索器]', ...args);
+      console.log('[搜索器]', ...args);
     }
   }
 
@@ -186,7 +186,7 @@
   }
 
   // ============================================
-  // 搜索功能 - 核心
+  // 核心搜索功能
   // ============================================
 
   /**
@@ -216,20 +216,8 @@
     `;
 
     try {
-      // 方案: 直接遍历当前可见的文件夹（最可靠）
-      const folders = searchVisibleFolders(keyword);
-
-      if (folders.length > 0) {
-        displayResults(folders, keyword);
-      } else {
-        // 如果没找到，尝试模拟网盘搜索
-        const searchResults = await tryPageSearch(keyword, searchAbortController.signal);
-        if (searchResults.length > 0) {
-          displayResults(searchResults, keyword);
-        } else {
-          displayResults([], keyword);
-        }
-      }
+      const folders = searchFolders(keyword);
+      displayResults(folders, keyword);
     } catch (error) {
       if (error.name !== 'AbortError') {
         log('搜索出错:', error);
@@ -239,101 +227,100 @@
   }
 
   /**
-   * 搜索当前可见的文件夹
+   * 搜索文件夹
    */
-  function searchVisibleFolders(keyword) {
+  function searchFolders(keyword) {
     const folders = [];
     const keywordLower = keyword.toLowerCase();
 
-    log('开始搜索可见文件夹，关键词:', keyword);
+    log('开始搜索，关键词:', keyword);
 
-    // 百度网盘可能的文件夹选择器
+    // 获取面包屑路径
+    let currentPath = '';
+    const breadcrumbEl = document.querySelector('[jsaction="breadcrumb"]');
+    if (breadcrumbEl) {
+      const links = breadcrumbEl.querySelectorAll('a, span');
+      const pathParts = [];
+      links.forEach(el => {
+        const text = el.textContent.trim();
+        if (text && text !== '>' && text !== '›') {
+          pathParts.push(text);
+        }
+      });
+      currentPath = pathParts.join(' > ');
+      log('当前路径:', currentPath);
+    }
+
+    // 查找所有文件列表项 - 新版百度网盘
     const selectors = [
-      // 表格视图
-      '.file-list div[data-type="1"]',
-      '.file-list .folder',
-      '.list-view .folder-item',
-      // 网格视图
-      '.grid-view .folder-item',
-      // 通用
+      // 主要选择器 - jsaction="click:item"
+      '[jsaction="click:item"]',
+      // 备用选择器
+      '.oJxPteb5e19b',
+      '.j9pXPteb5e19b',
+      // 通用文件项
       '[data-type="1"]',
-      '.item-wrapper[data-type]',
-      // 百度网盘特定
-      '.wp-s-file-list__list .item-wrapper',
-      '.nd-file-list-tree-node',
-      // 备用
-      '.tree-view .folder',
-      '.explorer-nested .folder',
-      '.file-entity',
+      // 网格视图项
+      '.g-image-item',
+      // 列表视图项
+      '.list-item',
     ];
 
-    let foundElements = [];
+    let fileItems = [];
 
     for (const selector of selectors) {
       const elements = document.querySelectorAll(selector);
-      log(`尝试选择器 "${selector}": 找到 ${elements.length} 个`);
-
+      log(`选择器 "${selector}": 找到 ${elements.length} 个`);
       if (elements.length > 0) {
-        foundElements = elements;
+        fileItems = elements;
         break;
       }
     }
 
-    foundElements.forEach(element => {
-      // 尝试多种方式获取文件夹名称
+    // 遍历文件项，提取文件夹
+    fileItems.forEach(item => {
+      // 获取文件名 - 查找 .title 元素
       let name = '';
 
-      // 方法1: title 属性
-      name = element.getAttribute('title') || '';
-
-      // 方法2: data-name 属性
-      if (!name) {
-        name = element.getAttribute('data-name') || '';
+      // 方法1: .title 元素
+      const titleEl = item.querySelector('.title');
+      if (titleEl) {
+        name = titleEl.getAttribute('title') || titleEl.textContent;
       }
 
-      // 方法3: data-title 属性
+      // 方法2: 直接从 item 获取 title
       if (!name) {
-        name = element.getAttribute('data-title') || '';
+        name = item.getAttribute('title') || '';
       }
 
-      // 方法4: 子元素中的文本
+      // 方法3: 查找任意有 title 的子元素
       if (!name) {
-        const nameEl = element.querySelector('[title]') ||
-                       element.querySelector('.name') ||
-                       element.querySelector('.filename') ||
-                       element.querySelector('.text');
-        name = nameEl ? (nameEl.getAttribute('title') || nameEl.textContent) : '';
-      }
-
-      // 方法5: 直接取文本内容
-      if (!name) {
-        name = element.textContent || '';
+        const titledEl = item.querySelector('[title]');
+        if (titledEl) {
+          name = titledEl.getAttribute('title');
+        }
       }
 
       name = name.trim();
 
-      // 匹配关键词
+      // 判断是否是文件夹
+      // 方法1: 检查是否有 📁 图标
+      const hasFolderIcon = item.querySelector('.u-font-icon')?.textContent?.includes('📁');
+
+      // 方法2: 检查 class 或 data 属性
+      const isFolderItem = item.classList.contains('oJxPteb5e19b') ||
+                          item.classList.contains('j9pXPteb5e19b') ||
+                          item.getAttribute('data-type') === '1' ||
+                          item.getAttribute('data-isDir') === '1';
+
+      // 如果匹配到关键词且是文件夹
       if (name && name.toLowerCase().includes(keywordLower)) {
-        // 获取路径
-        let path = '';
-
-        // 尝试从面包屑获取路径
-        const breadcrumb = document.querySelector('.bread-crumb, .breadcrumb, [class*="breadcrumb"]');
-        if (breadcrumb) {
-          path = breadcrumb.textContent.replace(/\s+/g, ' ').trim();
-        }
-
-        // 检查是否是文件夹类型
-        const dataType = element.getAttribute('data-type');
-        const isFolder = dataType === '1' ||
-                         element.classList.contains('folder') ||
-                         element.classList.contains('folder-item');
-
-        if (isFolder || dataType !== '0') {
+        if (hasFolderIcon || isFolderItem) {
+          log(`找到文件夹: ${name}`);
           folders.push({
             name: name,
-            path: path || '当前位置',
-            element: element,
+            path: currentPath || '根目录',
+            element: item,
           });
         }
       }
@@ -341,104 +328,6 @@
 
     log('找到文件夹数量:', folders.length);
     return folders.slice(0, CONFIG.maxResults);
-  }
-
-  /**
-   * 尝试使用网盘页面搜索
-   */
-  async function tryPageSearch(keyword, signal) {
-    // 找到网盘搜索框
-    const searchSelectors = [
-      'input[placeholder*="搜索"]',
-      '.search-input',
-      '.search-box input',
-      'input[type="search"]',
-      '.header-search input',
-      '[class*="search"] input',
-    ];
-
-    let searchInput = null;
-    for (const selector of searchSelectors) {
-      const input = document.querySelector(selector);
-      if (input && isVisible(input)) {
-        searchInput = input;
-        log('找到网盘搜索框:', selector);
-        break;
-      }
-    }
-
-    if (!searchInput) {
-      log('未找到网盘搜索框');
-      throw new Error('未找到搜索框');
-    }
-
-    // 保存原值
-    const originalValue = searchInput.value;
-
-    try {
-      // 输入关键词
-      searchInput.value = keyword;
-      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-      searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-
-      // 等待结果
-      await delay(CONFIG.searchWaitTime);
-
-      if (signal.aborted) throw new Error('已取消');
-
-      // 提取结果
-      const folders = extractSearchResults(keyword);
-      return folders;
-
-    } finally {
-      // 恢复原值
-      searchInput.value = originalValue;
-      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  }
-
-  /**
-   * 从搜索结果中提取文件夹
-   */
-  function extractSearchResults(keyword) {
-    const folders = [];
-    const keywordLower = keyword.toLowerCase();
-
-    const resultSelectors = [
-      '.search-result-list .folder',
-      '.search-result .folder-item',
-      '.result-list [data-type="1"]',
-      '.search-list .folder',
-      '[class*="result"] .folder',
-      '[class*="search"] [data-type="1"]',
-    ];
-
-    for (const selector of resultSelectors) {
-      const elements = document.querySelectorAll(selector);
-      log(`搜索结果选择器 "${selector}": 找到 ${elements.length} 个`);
-
-      if (elements.length > 0) {
-        elements.forEach(el => {
-          let name = el.getAttribute('title') ||
-                     el.getAttribute('data-name') ||
-                     el.querySelector('[title]')?.getAttribute('title') ||
-                     el.textContent;
-          name = name.trim();
-
-          if (name && name.toLowerCase().includes(keywordLower)) {
-            folders.push({
-              name: name,
-              path: '搜索结果',
-              element: el,
-            });
-          }
-        });
-
-        if (folders.length > 0) break;
-      }
-    }
-
-    return folders;
   }
 
   /**
@@ -456,7 +345,7 @@
         <div class="search-empty">
           <div class="empty-icon">🔍</div>
           <p>未找到匹配的文件夹</p>
-          <p class="hint">请确认网盘页面已加载文件夹</p>
+          <p class="hint">请确认在文件列表页面</p>
         </div>
       `;
       return;
@@ -510,50 +399,17 @@
 
     try {
       if (folder.element) {
-        // 直接点击
+        // 直接点击文件夹项
         folder.element.click();
         await delay(CONFIG.navigateDelay);
         showToast(`已进入: ${folder.name}`, 'success');
       } else {
-        // 尝试在列表中找到
-        const target = findFolderElement(folder.name);
-        if (target) {
-          target.click();
-          await delay(CONFIG.navigateDelay);
-          showToast(`已进入: ${folder.name}`, 'success');
-        } else {
-          showToast('未找到文件夹，请手动操作', 'error');
-        }
+        showToast('未找到文件夹，请手动操作', 'error');
       }
     } catch (error) {
       log('导航错误:', error);
       showToast('导航失败', 'error');
     }
-  }
-
-  function findFolderElement(folderName) {
-    const selectors = [
-      `[data-name="${folderName}"]`,
-      `[data-title="${folderName}"]`,
-      `[title="${folderName}"]`,
-      `.item-wrapper[title="${folderName}"]`,
-      '.item-wrapper',
-      '[class*="folder"]',
-    ];
-
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      for (const el of elements) {
-        const name = el.getAttribute('title') ||
-                     el.getAttribute('data-name') ||
-                     el.getAttribute('data-title') ||
-                     el.textContent;
-        if (name && name.trim() === folderName) {
-          return el;
-        }
-      }
-    }
-    return null;
   }
 
   // ============================================
@@ -611,7 +467,6 @@
   // 初始化
   // ============================================
   function init() {
-    // 延迟初始化
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initUI);
     } else {
@@ -657,34 +512,36 @@
       }
     });
 
-    // 打印可用信息，方便调试
-    console.log('%c✅ 百度网盘文件夹搜索器已加载', 'color: green; font-weight: bold');
+    console.log('%c✅ 百度网盘文件夹搜索器已加载 (v1.0.2)', 'color: green; font-weight: bold');
     console.log('%c💡 按 Ctrl+K 打开搜索面板', 'color: blue');
-    console.log('%c🔧 如需调试，可在控制台输入 window.baiduSearchDebug()', 'color: orange');
   }
 
   // 调试函数
   window.baiduSearchDebug = function() {
-    console.log('=== 百度网盘文件夹搜索器调试 ===');
+    console.log('=== 调试信息 ===');
 
-    // 搜索框
-    const inputs = document.querySelectorAll('input');
-    console.log('页面上的 input 元素:', inputs.length);
-    inputs.forEach((inp, i) => {
-      console.log(`  [${i}] placeholder: "${inp.placeholder}", visible: ${isVisible(inp)}`);
-    });
+    // 面包屑
+    const breadcrumb = document.querySelector('[jsaction="breadcrumb"]');
+    console.log('面包屑:', breadcrumb?.textContent?.trim());
 
-    // 可能的文件夹元素
+    // 文件项
     const testSelectors = [
-      '[data-type="1"]',
-      '.folder',
-      '.folder-item',
-      '.item-wrapper',
+      '[jsaction="click:item"]',
+      '.oJxPteb5e19b',
+      '.j9pXPteb5e19b',
+      '.title',
+      '.u-font-icon',
     ];
 
     testSelectors.forEach(sel => {
       const els = document.querySelectorAll(sel);
-      console.log(`选择器 "${sel}": ${els.length} 个`);
+      console.log(`"${sel}": ${els.length} 个`);
+      if (els.length > 0 && els.length < 10) {
+        els.forEach(el => {
+          const title = el.getAttribute('title') || el.textContent?.substring(0, 30);
+          console.log(`  - ${title}`);
+        });
+      }
     });
   };
 
