@@ -1,32 +1,22 @@
 /**
  * 百度网盘文件夹搜索器 - content.js
- * 版本: v1.0.4 - 详细调试版
+ * 版本: v1.0.5 - 修复文件夹识别
  */
 
 (function() {
   'use strict';
 
-  // ============================================
-  // 配置
-  // ============================================
   const CONFIG = {
     debounceDelay: 200,
-    searchWaitTime: 800,
     navigateDelay: 500,
     maxResults: 30,
-    debug: true,  // 开启调试
+    debug: false,
   };
 
-  // ============================================
-  // 状态
-  // ============================================
   let isPanelVisible = false;
   let currentResults = [];
   let activeIndex = -1;
 
-  // ============================================
-  // 工具函数
-  // ============================================
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   function debounce(fn, delay) {
@@ -169,9 +159,9 @@
   }
 
   // ============================================
-  // 核心搜索功能
+  // 核心搜索功能 - 根据实际 DOM 结构
   // ============================================
-  async function performSearch(keyword) {
+  function performSearch(keyword) {
     if (!keyword || keyword.trim() === '') {
       clearSearch();
       return;
@@ -188,9 +178,7 @@
       </div>
     `;
 
-    log('开始搜索:', keyword);
     const folders = searchFolders(keyword);
-    log('找到文件夹:', folders.length);
     displayResults(folders, keyword);
   }
 
@@ -214,63 +202,45 @@
         currentPath = pathParts.join(' > ');
       }
     }
-    log('当前路径:', currentPath);
 
-    // 找到所有带图标的项
-    const iconElements = document.querySelectorAll('.u-font-icon');
-    log('.u-font-icon 总数:', iconElements.length);
+    // 找到所有文件项 - 关键选择器！
+    // 从截图看，文件项有 jsaction="click:item" 属性
+    const fileItems = document.querySelectorAll('[jsaction="click:item"]');
 
-    iconElements.forEach((icon, index) => {
-      // 获取图标内容
-      const iconText = icon.textContent || '';
+    log('找到文件项数量:', fileItems.length);
+
+    fileItems.forEach((item, index) => {
+      // 获取图标 - 判断是文件夹还是文件
+      const iconEl = item.querySelector('.u-font-icon');
+      if (!iconEl) return;
+
+      const iconText = iconEl.textContent || '';
       const isFolder = iconText.includes('📁');
 
-      log(`[${index}] 图标: "${iconText}", isFolder: ${isFolder}`);
-
+      // 只处理文件夹
       if (!isFolder) return;
 
-      // 获取父级文件项元素
-      let fileItem = icon.closest('[jsaction]');
-      if (!fileItem) {
-        // 备用方法：向上找两级
-        fileItem = icon.parentElement?.parentElement;
-      }
+      // 获取文件名 - 从 .title 元素获取
+      const titleEl = item.querySelector('.title');
+      if (!titleEl) return;
 
-      log(`[${index}] fileItem:`, fileItem ? '找到' : '未找到');
-
-      if (!fileItem) return;
-
-      // 获取文件名
-      let name = '';
-      const titleEl = fileItem.querySelector('.title');
-      log(`[${index}] .title 元素:`, titleEl ? '找到' : '未找到');
-
-      if (titleEl) {
-        name = titleEl.getAttribute('title') || titleEl.textContent;
-        log(`[${index}] title 属性值:`, titleEl.getAttribute('title'));
-        log(`[${index}] title 文本内容:`, titleEl.textContent);
-      }
-
-      // 备用方法
-      if (!name) {
-        name = fileItem.getAttribute('title') || '';
-        log(`[${index}] 备用 name:`, name);
-      }
-
+      // 优先使用 title 属性
+      let name = titleEl.getAttribute('title') || titleEl.textContent;
       name = name.trim();
-      log(`[${index}] 最终 name: "${name}"`);
+
+      if (!name) return;
 
       // 匹配关键词
-      if (name && name.toLowerCase().includes(keywordLower)) {
-        log(`[${index}] ✅ 匹配成功!`);
+      if (name.toLowerCase().includes(keywordLower)) {
         folders.push({
           name: name,
           path: currentPath,
-          element: fileItem,
+          element: item,
         });
       }
     });
 
+    log('找到匹配文件夹:', folders.length);
     return folders.slice(0, CONFIG.maxResults);
   }
 
@@ -289,7 +259,7 @@
         <div class="search-empty">
           <div class="empty-icon">🔍</div>
           <p>未找到匹配的文件夹</p>
-          <p class="hint">请查看控制台调试信息</p>
+          <p class="hint">试试其他关键词</p>
         </div>
       `;
       return;
@@ -314,7 +284,6 @@
 
     resultsContainer.innerHTML = html;
 
-    // 绑定事件
     resultsContainer.querySelectorAll('.result-item').forEach(item => {
       item.addEventListener('click', () => {
         const index = parseInt(item.dataset.index, 10);
@@ -359,7 +328,6 @@
   // 键盘事件
   // ============================================
   function handleKeydown(e) {
-    // Ctrl/Cmd + K
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault();
       e.stopPropagation();
@@ -450,43 +418,21 @@
       }
     });
 
-    console.log('%c✅ 百度网盘文件夹搜索器已加载 (v1.0.4)', 'color: green; font-weight: bold');
+    console.log('%c✅ 百度网盘文件夹搜索器已加载 (v1.0.5)', 'color: green; font-weight: bold');
+    console.log('%c💡 按 Ctrl+K 或点击右下角 🔍 打开搜索面板', 'color: blue');
   }
 
-  // 详细调试
+  // 调试函数
   window.baiduSearchDebug = function() {
-    console.log('========== 详细调试 ==========');
+    console.log('=== 调试信息 ===');
+    const items = document.querySelectorAll('[jsaction="click:item"]');
+    console.log('[jsaction="click:item"] 数量:', items.length);
 
-    const iconElements = document.querySelectorAll('.u-font-icon');
-    console.log('.u-font-icon 总数:', iconElements.length);
-
-    iconElements.forEach((icon, i) => {
-      const iconText = icon.textContent || '';
-      const isFolder = iconText.includes('📁');
-
-      let fileItem = icon.closest('[jsaction]') || icon.parentElement?.parentElement;
-      let name = '';
-      let titleEl = null;
-
-      if (fileItem) {
-        titleEl = fileItem.querySelector('.title');
-        if (titleEl) {
-          name = titleEl.getAttribute('title') || titleEl.textContent;
-        }
-      }
-
-      console.log(`\n[${i}] ==========`);
-      console.log(`图标: "${iconText}"`);
-      console.log(`是文件夹: ${isFolder}`);
-      console.log(`fileItem:`, fileItem ? fileItem.className.substring(0, 50) : 'null');
-      console.log(`.title 元素:`, titleEl ? '有' : '无');
-      console.log(`获取到的名称: "${name}"`);
-      console.log(`HTML 结构:`, fileItem?.outerHTML?.substring(0, 200));
+    items.forEach((item, i) => {
+      const icon = item.querySelector('.u-font-icon')?.textContent || '';
+      const title = item.querySelector('.title')?.getAttribute('title') || '';
+      console.log(`[${i}] 图标: "${icon}", 名称: "${title}"`);
     });
-
-    console.log('\n========== 面包屑 ==========');
-    const breadcrumb = document.querySelector('[jsaction="breadcrumb"]');
-    console.log('面包屑:', breadcrumb?.textContent?.trim());
   };
 
   init();
