@@ -1,6 +1,6 @@
 /**
  * 百度网盘文件夹搜索器 - content.js
- * 版本: v1.0.3 - 修复 Ctrl+K 和文件夹识别
+ * 版本: v1.0.4 - 详细调试版
  */
 
 (function() {
@@ -10,10 +10,11 @@
   // 配置
   // ============================================
   const CONFIG = {
-    debounceDelay: 300,
+    debounceDelay: 200,
     searchWaitTime: 800,
     navigateDelay: 500,
     maxResults: 30,
+    debug: true,  // 开启调试
   };
 
   // ============================================
@@ -63,6 +64,12 @@
     document.body.appendChild(toast);
 
     setTimeout(() => toast.remove(), 3000);
+  }
+
+  function log(...args) {
+    if (CONFIG.debug) {
+      console.log('[搜索器]', ...args);
+    }
   }
 
   // ============================================
@@ -181,13 +188,10 @@
       </div>
     `;
 
-    try {
-      const folders = searchFolders(keyword);
-      displayResults(folders, keyword);
-    } catch (error) {
-      console.error('搜索出错:', error);
-      displayResults([], keyword);
-    }
+    log('开始搜索:', keyword);
+    const folders = searchFolders(keyword);
+    log('找到文件夹:', folders.length);
+    displayResults(folders, keyword);
   }
 
   function searchFolders(keyword) {
@@ -210,38 +214,55 @@
         currentPath = pathParts.join(' > ');
       }
     }
+    log('当前路径:', currentPath);
 
-    // 找到所有带图标的项 (.u-font-icon 的父元素)
+    // 找到所有带图标的项
     const iconElements = document.querySelectorAll('.u-font-icon');
+    log('.u-font-icon 总数:', iconElements.length);
 
-    iconElements.forEach(icon => {
-      // 获取图标内容判断是文件夹还是文件
+    iconElements.forEach((icon, index) => {
+      // 获取图标内容
       const iconText = icon.textContent || '';
       const isFolder = iconText.includes('📁');
 
-      if (!isFolder) return; // 只处理文件夹
+      log(`[${index}] 图标: "${iconText}", isFolder: ${isFolder}`);
+
+      if (!isFolder) return;
 
       // 获取父级文件项元素
-      let fileItem = icon.closest('[jsaction]') || icon.parentElement?.parentElement;
+      let fileItem = icon.closest('[jsaction]');
+      if (!fileItem) {
+        // 备用方法：向上找两级
+        fileItem = icon.parentElement?.parentElement;
+      }
+
+      log(`[${index}] fileItem:`, fileItem ? '找到' : '未找到');
 
       if (!fileItem) return;
 
-      // 获取文件名 - 从 .title 元素
+      // 获取文件名
       let name = '';
       const titleEl = fileItem.querySelector('.title');
+      log(`[${index}] .title 元素:`, titleEl ? '找到' : '未找到');
+
       if (titleEl) {
         name = titleEl.getAttribute('title') || titleEl.textContent;
+        log(`[${index}] title 属性值:`, titleEl.getAttribute('title'));
+        log(`[${index}] title 文本内容:`, titleEl.textContent);
       }
 
-      // 备用：从任意 title 属性
+      // 备用方法
       if (!name) {
         name = fileItem.getAttribute('title') || '';
+        log(`[${index}] 备用 name:`, name);
       }
 
       name = name.trim();
+      log(`[${index}] 最终 name: "${name}"`);
 
       // 匹配关键词
       if (name && name.toLowerCase().includes(keywordLower)) {
+        log(`[${index}] ✅ 匹配成功!`);
         folders.push({
           name: name,
           path: currentPath,
@@ -268,7 +289,7 @@
         <div class="search-empty">
           <div class="empty-icon">🔍</div>
           <p>未找到匹配的文件夹</p>
-          <p class="hint">请确认关键词正确</p>
+          <p class="hint">请查看控制台调试信息</p>
         </div>
       `;
       return;
@@ -335,21 +356,17 @@
   }
 
   // ============================================
-  // 键盘事件 - 使用捕获阶段确保响应
+  // 键盘事件
   // ============================================
   function handleKeydown(e) {
-    console.log('[搜索器] 键盘事件:', e.key, 'Ctrl:', e.ctrlKey);
-
     // Ctrl/Cmd + K
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault();
       e.stopPropagation();
-      console.log('[搜索器] Ctrl+K 触发');
       togglePanel();
       return;
     }
 
-    // 面板未打开时
     if (!isPanelVisible) return;
 
     switch (e.key) {
@@ -394,20 +411,16 @@
   // 初始化
   // ============================================
   function init() {
-    console.log('[搜索器] 开始初始化');
+    log('开始初始化');
 
-    // 等待页面加载
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initUI);
     } else {
-      // 延迟初始化
       setTimeout(initUI, 2000);
     }
   }
 
   function initUI() {
-    console.log('[搜索器] 创建 UI 元素');
-
     createToggleButton();
     createSearchPanel();
 
@@ -415,12 +428,10 @@
     const input = panel.querySelector('.search-input');
     const clearBtn = panel.querySelector('.search-clear');
 
-    // 搜索输入 - 立即搜索，无防抖
     input.addEventListener('input', (e) => {
       performSearch(e.target.value.trim());
     });
 
-    // 清除按钮
     clearBtn.addEventListener('click', () => {
       input.value = '';
       clearBtn.classList.remove('visible');
@@ -428,10 +439,8 @@
       input.focus();
     });
 
-    // 在捕获阶段绑定键盘事件
     document.addEventListener('keydown', handleKeydown, true);
 
-    // 点击外部关闭
     document.addEventListener('click', (e) => {
       const panel = document.getElementById('folder-search-panel');
       const toggle = document.getElementById('folder-search-toggle');
@@ -441,28 +450,43 @@
       }
     });
 
-    console.log('%c✅ 百度网盘文件夹搜索器已加载 (v1.0.3)', 'color: green; font-weight: bold');
-    console.log('%c💡 按 Ctrl+K 打开搜索面板', 'color: blue; font-weight: bold');
-    console.log('%c💡 或点击右下角 🔍 按钮', 'color: gray');
+    console.log('%c✅ 百度网盘文件夹搜索器已加载 (v1.0.4)', 'color: green; font-weight: bold');
   }
 
-  // 调试
+  // 详细调试
   window.baiduSearchDebug = function() {
-    console.log('=== 调试信息 ===');
+    console.log('========== 详细调试 ==========');
+
     const iconElements = document.querySelectorAll('.u-font-icon');
-    console.log('.u-font-icon 数量:', iconElements.length);
+    console.log('.u-font-icon 总数:', iconElements.length);
 
     iconElements.forEach((icon, i) => {
       const iconText = icon.textContent || '';
       const isFolder = iconText.includes('📁');
+
+      let fileItem = icon.closest('[jsaction]') || icon.parentElement?.parentElement;
       let name = '';
-      const fileItem = icon.closest('[jsaction]') || icon.parentElement?.parentElement;
-      const titleEl = fileItem?.querySelector('.title');
-      if (titleEl) {
-        name = titleEl.getAttribute('title') || titleEl.textContent;
+      let titleEl = null;
+
+      if (fileItem) {
+        titleEl = fileItem.querySelector('.title');
+        if (titleEl) {
+          name = titleEl.getAttribute('title') || titleEl.textContent;
+        }
       }
-      console.log(`[${i}] 图标: "${iconText}", 是文件夹: ${isFolder}, 名称: "${name}"`);
+
+      console.log(`\n[${i}] ==========`);
+      console.log(`图标: "${iconText}"`);
+      console.log(`是文件夹: ${isFolder}`);
+      console.log(`fileItem:`, fileItem ? fileItem.className.substring(0, 50) : 'null');
+      console.log(`.title 元素:`, titleEl ? '有' : '无');
+      console.log(`获取到的名称: "${name}"`);
+      console.log(`HTML 结构:`, fileItem?.outerHTML?.substring(0, 200));
     });
+
+    console.log('\n========== 面包屑 ==========');
+    const breadcrumb = document.querySelector('[jsaction="breadcrumb"]');
+    console.log('面包屑:', breadcrumb?.textContent?.trim());
   };
 
   init();
