@@ -1,16 +1,16 @@
 /**
- * 百度网盘文件夹搜索器 - content.js
- * 版本: v1.0.5 - 修复文件夹识别
+ * 百度网盘搜索器 - content.js
+ * 版本: v2.0.0 - 同时支持文件和文件夹搜索
  */
 
 (function() {
   'use strict';
 
   const CONFIG = {
-    debounceDelay: 200,
+    debounceDelay: 150,
     navigateDelay: 500,
     maxResults: 30,
-    debug: false,
+    debug: true,  // 开启调试
   };
 
   let isPanelVisible = false;
@@ -19,12 +19,10 @@
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  function debounce(fn, delay) {
-    let timer = null;
-    return function(...args) {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn.apply(this, args), delay);
-    };
+  function log(...args) {
+    if (CONFIG.debug) {
+      console.log('[搜索器]', ...args);
+    }
   }
 
   function escapeRegExp(string) {
@@ -56,12 +54,6 @@
     setTimeout(() => toast.remove(), 3000);
   }
 
-  function log(...args) {
-    if (CONFIG.debug) {
-      console.log('[搜索器]', ...args);
-    }
-  }
-
   // ============================================
   // DOM 元素创建
   // ============================================
@@ -69,7 +61,7 @@
     const btn = document.createElement('button');
     btn.id = 'folder-search-toggle';
     btn.innerHTML = '🔍';
-    btn.title = '文件夹搜索';
+    btn.title = '搜索文件/文件夹 (Ctrl+K)';
     btn.addEventListener('click', togglePanel);
     document.body.appendChild(btn);
     return btn;
@@ -84,7 +76,7 @@
         <div class="search-input-wrapper">
           <input type="text"
                  class="search-input"
-                 placeholder="输入文件夹名称..."
+                 placeholder="输入文件名或文件夹名..."
                  autocomplete="off"
                  spellcheck="false">
           <button class="search-clear" title="清除">✕</button>
@@ -92,15 +84,15 @@
       </div>
       <div class="search-results">
         <div class="search-empty">
-          <div class="empty-icon">📁</div>
-          <p>输入关键词搜索文件夹</p>
-          <p class="hint">点击结果直接跳转</p>
+          <div class="empty-icon">📂</div>
+          <p>输入关键词搜索</p>
+          <p class="hint">可搜索文件和文件夹</p>
         </div>
       </div>
       <div class="search-footer">
         <div class="shortcut">
           <span class="key">↑↓</span> 选择
-          <span class="key">Enter</span> 进入
+          <span class="key">Enter</span> ${navigator.platform.includes('Mac') ? '⏎' : '进入'} / 选中
           <span class="key">Esc</span> 关闭
         </div>
       </div>
@@ -147,9 +139,9 @@
     if (results) {
       results.innerHTML = `
         <div class="search-empty">
-          <div class="empty-icon">📁</div>
-          <p>输入关键词搜索文件夹</p>
-          <p class="hint">点击结果直接跳转</p>
+          <div class="empty-icon">📂</div>
+          <p>输入关键词搜索</p>
+          <p class="hint">可搜索文件和文件夹</p>
         </div>
       `;
     }
@@ -159,7 +151,7 @@
   }
 
   // ============================================
-  // 核心搜索功能 - 根据实际 DOM 结构
+  // 核心搜索功能 - 同时搜索文件和文件夹
   // ============================================
   function performSearch(keyword) {
     if (!keyword || keyword.trim() === '') {
@@ -178,23 +170,28 @@
       </div>
     `;
 
-    const folders = searchFolders(keyword);
-    displayResults(folders, keyword);
+    const items = searchItems(keyword);
+    displayResults(items, keyword);
   }
 
-  function searchFolders(keyword) {
-    const folders = [];
+  /**
+   * 搜索文件和文件夹
+   */
+  function searchItems(keyword) {
+    const results = [];
     const keywordLower = keyword.toLowerCase();
 
-    // 获取面包屑路径
+    log('开始搜索:', keyword);
+
+    // 获取当前路径
     let currentPath = '当前位置';
-    const breadcrumbEl = document.querySelector('[jsaction="breadcrumb"]');
+    const breadcrumbEl = document.querySelector('[jsaction*="breadcrumb"], .breadcrumb, [class*="breadcrumb"]');
     if (breadcrumbEl) {
-      const spans = breadcrumbEl.querySelectorAll('span');
+      const spans = breadcrumbEl.querySelectorAll('span, a');
       const pathParts = [];
-      spans.forEach(span => {
-        const text = span.textContent.trim();
-        if (text && text !== '>' && text !== '›') {
+      spans.forEach(el => {
+        const text = el.textContent.trim();
+        if (text && text.length < 50) {
           pathParts.push(text);
         }
       });
@@ -203,62 +200,93 @@
       }
     }
 
-    // 找到所有文件项 - 关键选择器！
-    // 从截图看，文件项有 jsaction="click:item" 属性
-    const fileItems = document.querySelectorAll('[jsaction="click:item"]');
+    // 找到所有文件项 - 尝试多种选择器
+    let fileItems = document.querySelectorAll('[jsaction*="click:item"]');
 
     log('找到文件项数量:', fileItems.length);
 
+    // 如果没找到，尝试其他选择器
+    if (fileItems.length === 0) {
+      fileItems = document.querySelectorAll('[class*="item"], .file-item, .list-item');
+      log('使用备用选择器，数量:', fileItems.length);
+    }
+
     fileItems.forEach((item, index) => {
-      // 获取图标 - 判断是文件夹还是文件
+      // 获取图标
       const iconEl = item.querySelector('.u-font-icon');
-      if (!iconEl) return;
+      const iconText = iconEl ? (iconEl.textContent || '').trim() : '';
 
-      const iconText = iconEl.textContent || '';
+      // 判断是文件夹还是文件
+      // 📁 文件夹, 📄 文件, 🎬 视频, 🎵 音频, 🖼️ 图片, 📝 文档 等
       const isFolder = iconText.includes('📁');
+      const icon = isFolder ? '📁' : (iconText || '📄');
 
-      // 只处理文件夹
-      if (!isFolder) return;
+      // 获取文件名 - 尝试多种方式
+      let name = '';
+      const titleEl = item.querySelector('.title, .name, [class*="title"], [class*="name"]');
 
-      // 获取文件名 - 从 .title 元素获取
-      const titleEl = item.querySelector('.title');
-      if (!titleEl) return;
+      if (titleEl) {
+        // 优先使用 title 属性
+        name = titleEl.getAttribute('title') || titleEl.textContent;
+        name = name.trim();
+      }
 
-      // 优先使用 title 属性
-      let name = titleEl.getAttribute('title') || titleEl.textContent;
-      name = name.trim();
+      // 如果还是没找到，尝试直接获取文本
+      if (!name) {
+        // 查找包含文本的子元素
+        const textEl = item.querySelector('[class*="text"], [class*="content"]');
+        if (textEl) {
+          name = textEl.textContent.trim();
+        }
+      }
 
-      if (!name) return;
+      // 最后的尝试：直接获取整个项目的文本
+      if (!name) {
+        const clone = item.cloneNode(true);
+        // 移除图标元素
+        const icons = clone.querySelectorAll('.u-font-icon, .icon, [class*="icon"]');
+        icons.forEach(el => el.remove());
+        name = clone.textContent.trim();
+      }
+
+      if (!name) {
+        log(`[${index}] 无文件名，跳过`);
+        return;
+      }
 
       // 匹配关键词
       if (name.toLowerCase().includes(keywordLower)) {
-        folders.push({
+        results.push({
           name: name,
           path: currentPath,
+          isFolder: isFolder,
+          icon: icon,
           element: item,
+          index: index,
         });
+        log(`[${index}] 匹配: "${name}", 文件夹: ${isFolder}`);
       }
     });
 
-    log('找到匹配文件夹:', folders.length);
-    return folders.slice(0, CONFIG.maxResults);
+    log('搜索结果:', results.length, '个');
+    return results.slice(0, CONFIG.maxResults);
   }
 
   /**
    * 显示搜索结果
    */
-  function displayResults(folders, keyword) {
+  function displayResults(items, keyword) {
     const resultsContainer = document.querySelector('.search-results');
     if (!resultsContainer) return;
 
-    currentResults = folders;
-    activeIndex = folders.length > 0 ? 0 : -1;
+    currentResults = items;
+    activeIndex = items.length > 0 ? 0 : -1;
 
-    if (folders.length === 0) {
+    if (items.length === 0) {
       resultsContainer.innerHTML = `
         <div class="search-empty">
           <div class="empty-icon">🔍</div>
-          <p>未找到匹配的文件夹</p>
+          <p>未找到匹配的文件或文件夹</p>
           <p class="hint">试试其他关键词</p>
         </div>
       `;
@@ -266,28 +294,31 @@
     }
 
     let html = '';
-    folders.forEach((folder, index) => {
-      const highlightedName = highlightKeyword(folder.name, keyword);
+    items.forEach((item, index) => {
+      const highlightedName = highlightKeyword(item.name, keyword);
+      const typeLabel = item.isFolder ? '文件夹' : '文件';
+      const hint = item.isFolder ? '↵ 进入' : '↵ 选中';
 
       html += `
-        <div class="result-item ${index === 0 ? 'active' : ''}"
+        <div class="result-item ${index === 0 ? 'active' : ''} ${item.isFolder ? 'folder' : 'file'}"
              data-index="${index}">
-          <span class="result-icon">📁</span>
+          <span class="result-icon">${item.icon}</span>
           <div class="result-content">
             <div class="result-name">${highlightedName}</div>
-            <div class="result-path">${escapeHtml(folder.path)}</div>
+            <div class="result-path">${escapeHtml(item.path)} · ${typeLabel}</div>
           </div>
-          <span class="result-hint">↵</span>
+          <span class="result-hint">${hint}</span>
         </div>
       `;
     });
 
     resultsContainer.innerHTML = html;
 
+    // 绑定点击事件
     resultsContainer.querySelectorAll('.result-item').forEach(item => {
       item.addEventListener('click', () => {
         const index = parseInt(item.dataset.index, 10);
-        navigateToFolder(folders[index]);
+        selectItem(items[index]);
       });
 
       item.addEventListener('mouseenter', () => {
@@ -304,23 +335,23 @@
   }
 
   // ============================================
-  // 导航功能
+  // 选择/导航功能
   // ============================================
-  async function navigateToFolder(folder) {
+  async function selectItem(item) {
     closePanel();
-    showToast(`正在进入: ${folder.name}`);
+    showToast(`正在选择: ${item.name}`);
 
     try {
-      if (folder.element) {
-        folder.element.click();
+      if (item.element) {
+        item.element.click();
         await delay(CONFIG.navigateDelay);
-        showToast(`已进入: ${folder.name}`, 'success');
+        showToast(`已选择: ${item.name}`, 'success');
       } else {
-        showToast('未找到文件夹', 'error');
+        showToast('未找到项目', 'error');
       }
     } catch (error) {
-      console.error('导航错误:', error);
-      showToast('导航失败', 'error');
+      console.error('选择错误:', error);
+      showToast('选择失败', 'error');
     }
   }
 
@@ -362,7 +393,7 @@
       case 'Enter':
         e.preventDefault();
         if (activeIndex >= 0 && currentResults[activeIndex]) {
-          navigateToFolder(currentResults[activeIndex]);
+          selectItem(currentResults[activeIndex]);
         }
         break;
     }
@@ -379,16 +410,23 @@
   // 初始化
   // ============================================
   function init() {
-    log('开始初始化');
+    log('开始初始化搜索器');
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initUI);
     } else {
+      // 延迟初始化，等待网盘加载完成
       setTimeout(initUI, 2000);
     }
   }
 
   function initUI() {
+    // 移除已存在的元素（防止重复）
+    const existingPanel = document.getElementById('folder-search-panel');
+    const existingBtn = document.getElementById('folder-search-toggle');
+    if (existingPanel) existingPanel.remove();
+    if (existingBtn) existingBtn.remove();
+
     createToggleButton();
     createSearchPanel();
 
@@ -396,10 +434,16 @@
     const input = panel.querySelector('.search-input');
     const clearBtn = panel.querySelector('.search-clear');
 
+    // 输入事件 - 带防抖
+    let debounceTimer;
     input.addEventListener('input', (e) => {
-      performSearch(e.target.value.trim());
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        performSearch(e.target.value.trim());
+      }, CONFIG.debounceDelay);
     });
 
+    // 清除按钮
     clearBtn.addEventListener('click', () => {
       input.value = '';
       clearBtn.classList.remove('visible');
@@ -407,8 +451,10 @@
       input.focus();
     });
 
+    // 全局键盘事件
     document.addEventListener('keydown', handleKeydown, true);
 
+    // 点击外部关闭
     document.addEventListener('click', (e) => {
       const panel = document.getElementById('folder-search-panel');
       const toggle = document.getElementById('folder-search-toggle');
@@ -418,20 +464,40 @@
       }
     });
 
-    console.log('%c✅ 百度网盘文件夹搜索器已加载 (v1.0.5)', 'color: green; font-weight: bold');
-    console.log('%c💡 按 Ctrl+K 或点击右下角 🔍 打开搜索面板', 'color: blue');
+    console.log('%c✅ 百度网盘搜索器已加载 (v2.0.0)', 'color: green; font-weight: bold');
+    console.log('%c💡 按 Ctrl+K 打开搜索面板', 'color: blue');
+    console.log('%c📝 可搜索文件和文件夹', 'color: blue');
   }
 
+  // ============================================
   // 调试函数
+  // ============================================
   window.baiduSearchDebug = function() {
     console.log('=== 调试信息 ===');
-    const items = document.querySelectorAll('[jsaction="click:item"]');
-    console.log('[jsaction="click:item"] 数量:', items.length);
 
-    items.forEach((item, i) => {
+    // 尝试各种选择器
+    const selectors = [
+      '[jsaction*="click:item"]',
+      '[class*="item"]',
+      '.file-item',
+      '.list-item',
+      '[class*="file-list"] > *',
+    ];
+
+    selectors.forEach(sel => {
+      const items = document.querySelectorAll(sel);
+      console.log(`选择器 "${sel}": ${items.length} 个`);
+    });
+
+    // 获取页面所有文件项的详细信息
+    const allItems = document.querySelectorAll('[jsaction*="click:item"], [class*="item"]');
+    console.log('\n文件项详情:');
+    allItems.forEach((item, i) => {
       const icon = item.querySelector('.u-font-icon')?.textContent || '';
-      const title = item.querySelector('.title')?.getAttribute('title') || '';
-      console.log(`[${i}] 图标: "${icon}", 名称: "${title}"`);
+      const title = item.querySelector('.title')?.getAttribute('title') ||
+                    item.querySelector('.title')?.textContent || '';
+      const jsaction = item.getAttribute('jsaction') || '';
+      console.log(`[${i}] icon="${icon}" title="${title.substring(0, 30)}" jsaction="${jsaction.substring(0, 30)}"`);
     });
   };
 
